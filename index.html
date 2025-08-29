@@ -1,0 +1,1674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DayZ Mutant Spawn System - Enhanced Interactive Map Editor with Heatmap</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #36393f;
+            color: #dcddde;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 380px;
+            background: #2f3136;
+            border-right: 1px solid #202225;
+            overflow-y: auto;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            background: linear-gradient(135deg, #5865f2 0%, #7289da 100%);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.3rem;
+            margin-bottom: 5px;
+        }
+
+        .sidebar-header p {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+            padding: 15px;
+            background: #40444b;
+            border-bottom: 1px solid #202225;
+        }
+
+        .quick-action-btn {
+            flex: 1;
+            background: #5865f2;
+            color: white;
+            border: none;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+        }
+
+        .quick-action-btn:hover {
+            background: #4752c4;
+            transform: translateY(-1px);
+        }
+
+        .quick-action-btn.secondary {
+            background: #6c757d;
+        }
+
+        .quick-action-btn.secondary:hover {
+            background: #5a6268;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .map-container {
+            flex: 1;
+            position: relative;
+            background: #202225;
+        }
+
+        .map-canvas {
+            cursor: crosshair;
+            display: block;
+        }
+
+        .map-controls {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        .map-control-btn {
+            background: rgba(64, 68, 75, 0.9);
+            color: #dcddde;
+            border: none;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(5px);
+        }
+
+        .map-control-btn:hover {
+            background: rgba(88, 101, 242, 0.9);
+            transform: scale(1.05);
+        }
+
+        .coordinates-display {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(47, 49, 54, 0.95);
+            color: #dcddde;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(88, 101, 242, 0.3);
+        }
+
+        .context-menu {
+            position: absolute;
+            background: rgba(64, 68, 75, 0.95);
+            border: 1px solid #202225;
+            border-radius: 6px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+            z-index: 1000;
+            display: none;
+            min-width: 180px;
+            backdrop-filter: blur(10px);
+        }
+
+        .context-menu-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(47, 49, 54, 0.5);
+            transition: background 0.2s ease;
+            font-size: 0.9rem;
+        }
+
+        .context-menu-item:hover {
+            background: rgba(88, 101, 242, 0.8);
+        }
+
+        .context-menu-item:last-child {
+            border-bottom: none;
+        }
+
+        .zone-list {
+            background: #40444b;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(88, 101, 242, 0.2);
+        }
+
+        .zone-list-header {
+            background: linear-gradient(135deg, #5865f2, #4752c4);
+            color: white;
+            padding: 10px 14px;
+            font-weight: 600;
+            border-radius: 6px 6px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        .zone-item {
+            padding: 12px 14px;
+            border-bottom: 1px solid #36393f;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .zone-item:hover {
+            background: #36393f;
+            transform: translateX(2px);
+        }
+
+        .zone-item:last-child {
+            border-bottom: none;
+        }
+
+        .zone-item.selected {
+            background: linear-gradient(90deg, rgba(88, 101, 242, 0.2), rgba(88, 101, 242, 0.05));
+            border-left: 3px solid #5865f2;
+            transform: translateX(0);
+        }
+
+        .zone-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 0.9rem;
+        }
+
+        .zone-info {
+            font-size: 0.8rem;
+            color: #b9bbbe;
+            line-height: 1.3;
+        }
+
+        .zone-actions {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .zone-item:hover .zone-actions {
+            opacity: 1;
+        }
+
+        .zone-action-btn {
+            background: #ed4245;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 4px 6px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            margin-left: 4px;
+        }
+
+        .zone-action-btn:hover {
+            background: #c62828;
+        }
+
+        .zone-details {
+            background: #40444b;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(250, 166, 26, 0.2);
+        }
+
+        .zone-details h3 {
+            margin-bottom: 12px;
+            color: #faa61a;
+            font-size: 1rem;
+        }
+
+        .spawn-point-item {
+            background: #36393f;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-left: 3px solid #faa61a;
+            transition: all 0.2s ease;
+        }
+
+        .spawn-point-item:hover {
+            background: #33373c;
+            transform: translateX(2px);
+        }
+
+        .spawn-point-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .spawn-point-name {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #faa61a;
+        }
+
+        .spawn-point-info {
+            font-size: 0.75rem;
+            color: #b9bbbe;
+            line-height: 1.3;
+        }
+
+        .tier-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 6px;
+        }
+
+        .tier-tag {
+            background: #5865f2;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #5865f2 0%, #7289da 100%);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(88, 101, 242, 0.3);
+        }
+
+        .btn-small {
+            padding: 6px 10px;
+            font-size: 0.75rem;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #3ba55c, #2d7d32);
+        }
+
+        .btn-success:hover {
+            box-shadow: 0 4px 8px rgba(59, 165, 92, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ed4245, #c62828);
+        }
+
+        .btn-danger:hover {
+            box-shadow: 0 4px 8px rgba(237, 66, 69, 0.3);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6c757d, #5a6268);
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: #dcddde;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #40444b;
+            border-radius: 4px;
+            background: #36393f;
+            color: #dcddde;
+            font-size: 0.85rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #5865f2;
+            box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.2);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 8px;
+        }
+
+        .legend {
+            position: absolute;
+            top: 70px;
+            right: 15px;
+            background: rgba(47, 49, 54, 0.95);
+            border-radius: 6px;
+            padding: 10px;
+            min-width: 140px;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(88, 101, 242, 0.2);
+        }
+
+        .legend h4 {
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: #faa61a;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4px;
+            font-size: 0.75rem;
+        }
+
+        .legend-color {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        .validation-status {
+            position: absolute;
+            bottom: 60px;
+            right: 15px;
+            padding: 6px 10px;
+            border-radius: 4px;
+            color: white;
+            font-weight: 600;
+            z-index: 100;
+            font-size: 0.8rem;
+            backdrop-filter: blur(5px);
+        }
+
+        .validation-status.valid {
+            background: rgba(59, 165, 92, 0.9);
+        }
+
+        .validation-status.invalid {
+            background: rgba(237, 66, 69, 0.9);
+        }
+
+        .help-tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+
+        .help-tooltip::after {
+            content: '?';
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #5865f2;
+            color: white;
+            text-align: center;
+            font-size: 0.7rem;
+            line-height: 14px;
+            margin-left: 4px;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(32, 34, 37, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(3px);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #40444b;
+            border-top: 3px solid #5865f2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: rgba(32, 34, 37, 0.9);
+            color: #b9bbbe;
+            padding: 6px 10px;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            backdrop-filter: blur(5px);
+        }
+
+        .discord-link {
+            background: #7289da;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 0.65rem;
+        }
+
+        .discord-link:hover {
+            background: #5865f2;
+            transform: translateY(-1px);
+        }
+
+        .empty-state {
+            padding: 30px 20px;
+            text-align: center;
+            color: #b9bbbe;
+            font-style: italic;
+        }
+
+        .empty-state-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+
+        /* Heatmap Controls */
+        .heatmap-controls {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(47, 49, 54, 0.95);
+            border-radius: 6px;
+            padding: 10px;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(88, 101, 242, 0.2);
+        }
+
+        .heatmap-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .heatmap-slider {
+            width: 100px;
+            height: 4px;
+            border-radius: 2px;
+            background: #40444b;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .heatmap-legend {
+            position: absolute;
+            top: 15px;
+            left: 180px;
+            background: rgba(47, 49, 54, 0.95);
+            border-radius: 6px;
+            padding: 10px;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(88, 101, 242, 0.2);
+            display: none;
+        }
+
+        .heatmap-gradient {
+            width: 150px;
+            height: 20px;
+            background: linear-gradient(to right, 
+                rgba(0, 0, 255, 0.3),
+                rgba(0, 255, 0, 0.3),
+                rgba(255, 255, 0, 0.3),
+                rgba(255, 165, 0, 0.3),
+                rgba(255, 0, 0, 0.3));
+            border-radius: 3px;
+            margin: 5px 0;
+        }
+
+        .heatmap-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: #b9bbbe;
+        }
+
+        /* Improved responsive design */
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 320px;
+            }
+            
+            .sidebar-header h1 {
+                font-size: 1.1rem;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>🧟 Mutant Spawn Editor</h1>
+                <p>Interactive zone placement for DayZ</p>
+            </div>
+            
+            <div class="quick-actions">
+                <input type="file" id="jsonFileInput" accept=".json" style="display: none;" onchange="importJSON(event)">
+                <button class="quick-action-btn secondary" onclick="document.getElementById('jsonFileInput').click()">Import</button>
+                <button class="quick-action-btn secondary" onclick="loadSampleData()">Sample</button>
+                <button class="quick-action-btn" onclick="downloadJSON()">Export</button>
+            </div>
+            
+            <div class="sidebar-content">
+                <div class="zone-list">
+                    <div class="zone-list-header">
+                        <span>Zones (<span id="zoneCount">0</span>)</span>
+                        <div>
+                            <button class="btn btn-small" onclick="toggleHeatmap()" id="heatmapToggleBtn">Heatmap</button>
+                            <button class="btn btn-small" onclick="clearAllData()" title="Clear all zones">Clear</button>
+                        </div>
+                    </div>
+                    <div id="zonesList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🎯</div>
+                            <div>Right-click on map to create your first zone</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Zone Details Panel -->
+                <div id="zoneDetails" class="zone-details" style="display: none;">
+                    <h3>Zone Configuration</h3>
+                    <div class="form-group">
+                        <label>Zone Name <span class="help-tooltip" title="Give your zone a descriptive name"></span></label>
+                        <input type="text" id="zoneName" onchange="updateSelectedZone('name', this.value)" placeholder="e.g., Military Base Alpha">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select id="zoneEnabled" onchange="updateSelectedZone('enabled', parseInt(this.value))">
+                                <option value="1">Active</option>
+                                <option value="0">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Trigger Radius</label>
+                            <input type="number" id="zoneTriggerRadius" onchange="updateSelectedZone('triggerRadius', parseFloat(this.value))" min="10" placeholder="100">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Spawn Chance</label>
+                            <input type="number" id="zoneSpawnChance" onchange="updateSelectedZone('spawnChance', parseFloat(this.value))" min="0" max="1" step="0.1" placeholder="1.0">
+                        </div>
+                        <div class="form-group">
+                            <label>Despawn on Exit</label>
+                            <select id="zoneDespawnOnExit" onchange="updateSelectedZone('despawnOnExit', parseInt(this.value))">
+                                <option value="1">Yes</option>
+                                <option value="0">No</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Despawn Distance</label>
+                            <input type="number" id="zoneDespawnDistance" onchange="updateSelectedZone('despawnDistance', parseFloat(this.value))" min="50" placeholder="150">
+                        </div>
+                        <div class="form-group">
+                            <label>Respawn Cooldown</label>
+                            <input type="number" id="zoneRespawnCooldown" onchange="updateSelectedZone('respawnCooldown', parseFloat(this.value))" min="30" placeholder="300">
+                        </div>
+                    </div>
+
+                    <h4 style="margin: 15px 0 8px 0; color: #faa61a;">Spawn Points</h4>
+                    <div id="spawnPointsList">
+                        <!-- Spawn points will be rendered here -->
+                    </div>
+                    <button class="btn btn-success btn-small" onclick="addSpawnPointToSelected()" style="width: 100%; margin: 8px 0;">Add Spawn Point</button>
+                    
+                    <div style="display: flex; gap: 8px; margin-top: 15px;">
+                        <button class="btn btn-danger btn-small" onclick="deleteSelectedZone()" style="flex: 1;">Delete</button>
+                        <button class="btn btn-secondary btn-small" onclick="duplicateSelectedZone()" style="flex: 1;">Duplicate</button>
+                        <button class="btn btn-secondary btn-small" onclick="centerOnZone()" style="flex: 1;">Center</button>
+                    </div>
+                </div>
+
+                <!-- Global Settings -->
+                <div class="zone-details">
+                    <h3>Global Settings</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>System Status</label>
+                            <select id="systemEnabled" onchange="updateGlobalSettings()">
+                                <option value="1">Enabled</option>
+                                <option value="0">Disabled</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Check Interval</label>
+                            <input type="number" id="checkInterval" value="15.0" step="0.1" onchange="updateGlobalSettings()" placeholder="15.0">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Max Entities/Zone</label>
+                            <input type="number" id="maxEntitiesPerZone" value="20" onchange="updateGlobalSettings()" placeholder="20">
+                        </div>
+                        <div class="form-group">
+                            <label>Entity Lifetime</label>
+                            <input type="number" id="entityLifetime" value="600" onchange="updateGlobalSettings()" placeholder="600">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Min Distance From Player</label>
+                        <input type="number" id="minSpawnDistance" value="30.0" step="0.1" onchange="updateGlobalSettings()" placeholder="30.0">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="map-container">
+            <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+                <div class="loading-spinner"></div>
+            </div>
+
+            <canvas id="mapCanvas" class="map-canvas"></canvas>
+            
+            <!-- Heatmap Controls -->
+            <div class="heatmap-controls">
+                <div class="heatmap-toggle">
+                    <label style="font-size: 0.8rem; color: #dcddde;">Heatmap</label>
+                    <input type="checkbox" id="heatmapToggle" onchange="toggleHeatmap()" style="margin-left: 8px;">
+                </div>
+                <div style="font-size: 0.7rem; color: #b9bbbe; margin-top: 5px;">
+                    <label>Intensity: <span id="intensityValue">0.5</span></label>
+                    <input type="range" class="heatmap-slider" id="intensitySlider" 
+                           min="0.1" max="1.0" step="0.1" value="0.5" 
+                           oninput="updateHeatmapIntensity(this.value)">
+                </div>
+            </div>
+
+            <div class="heatmap-legend" id="heatmapLegend">
+                <h4 style="font-size: 0.8rem; margin-bottom: 5px;">Spawn Chance</h4>
+                <div class="heatmap-gradient"></div>
+                <div class="heatmap-labels">
+                    <span>0%</span>
+                    <span>25%</span>
+                    <span>50%</span>
+                    <span>75%</span>
+                    <span>100%</span>
+                </div>
+            </div>
+
+            <div class="map-controls">
+                <button class="map-control-btn" onclick="zoomIn()" title="Zoom In">+</button>
+                <button class="map-control-btn" onclick="zoomOut()" title="Zoom Out">-</button>
+                <button class="map-control-btn" onclick="resetView()" title="Reset View">⌂</button>
+                <button class="map-control-btn" onclick="toggleGrid()" title="Toggle Grid">⊞</button>
+            </div>
+
+            <div class="legend">
+                <h4>Map Legend</h4>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #5865f2;"></div>
+                    Trigger Zone
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #faa61a;"></div>
+                    Spawn Point
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #ed4245;"></div>
+                    Selected
+                </div>
+            </div>
+
+            <div class="validation-status" id="validationStatus" style="display: none;">
+                ✓ All valid
+            </div>
+
+            <div class="coordinates-display" id="coordsDisplay">
+                Mouse: 0, 0 | DayZ: 0, 0
+            </div>
+        </div>
+
+        <!-- Context Menu -->
+        <div id="contextMenu" class="context-menu">
+            <div class="context-menu-item" onclick="createZoneHere()">+ Create Zone Here</div>
+            <div class="context-menu-item" onclick="addSpawnPointHere()" id="addSpawnPointOption" style="display: none;">+ Add Spawn Point Here</div>
+            <div class="context-menu-item" onclick="hideContextMenu()">Cancel</div>
+        </div>
+
+        <div class="footer">
+            <span>Enhanced Map Editor v2.0 with Heatmap by <strong>Exodus DayZ Forge</strong></span>
+            <a href="https://discord.gg/Yz8S558D6M" target="_blank" class="discord-link">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419-.0002 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9554 2.4189-2.1568 2.4189Z"/>
+                </svg>
+                Discord
+            </a>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="contextMenu" class="context-menu">
+        <div class="context-menu-item" onclick="createZoneHere()">+ Create Zone Here</div>
+        <div class="context-menu-item" onclick="addSpawnPointHere()" id="addSpawnPointOption" style="display: none;">+ Add Spawn Point Here</div>
+        <div class="context-menu-item" onclick="hideContextMenu()">Cancel</div>
+    </div>
+
+    <script>
+        // Global variables
+        let canvas, ctx;
+        let backgroundImage = null;
+        let mapData = {
+            globalSettings: {
+                systemEnabled: 1,
+                checkInterval: 15.0,
+                maxEntitiesPerZone: 20,
+                entityLifetime: 600,
+                minSpawnDistanceFromPlayer: 30.0
+            },
+            zones: []
+        };
+
+        // Default tiers for reference
+        let tiersData = {
+            "1": {
+                name: "Basic Zombies",
+                classnames: ["ZmbM_HunterOld_Autumn", "ZmbF_SurvivorNormal_Blue", "ZmbM_CitizenASkinny"]
+            },
+            "2": {
+                name: "Military Zombies", 
+                classnames: ["ZmbM_SoldierNormal", "ZmbM_PatrolNormal_PautRev"]
+            },
+            "3": {
+                name: "Wildlife",
+                classnames: ["Animal_UrsusArctos", "Animal_CanisLupus_Grey", "Animal_SusScrofa"]
+            }
+        };
+
+        let selectedZone = null;
+        let contextMenuPos = {x: 0, y: 0};
+        let gameContextPos = {x: 0, y: 0};
+        let showGrid = false;
+        let zoneCounter = 0;
+
+        // Heatmap variables
+        let showHeatmap = false;
+        let heatmapIntensity = 0.5;
+        let heatmapCanvas = null;
+        let heatmapCtx = null;
+
+        // Map view settings
+        let viewSettings = {
+            offsetX: 0,
+            offsetY: 0,
+            scale: 0.5,
+            isDragging: false,
+            dragStart: {x: 0, y: 0}
+        };
+
+        // Map size (10km x 10km based on the image)
+        const MAP_SIZE = 10000;
+
+        // Initialize the application
+        function init() {
+            canvas = document.getElementById('mapCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Create heatmap canvas
+            heatmapCanvas = document.createElement('canvas');
+            heatmapCtx = heatmapCanvas.getContext('2d');
+            
+            loadMapImage();
+            resizeCanvas();
+            setupEventListeners();
+            updateUI();
+            loadTiersData();
+        }
+
+        // Load the background map image
+        function loadMapImage() {
+            showLoading(true);
+            backgroundImage = new Image();
+            backgroundImage.crossOrigin = 'anonymous';
+            backgroundImage.onload = function() {
+                showLoading(false);
+                render();
+            };
+            backgroundImage.onerror = function() {
+                console.error("Failed to load map image");
+                showLoading(false);
+                // Create a placeholder if image fails to load
+                createPlaceholderMap();
+            };
+            
+            // Use base64 image from original file
+            backgroundImage.src = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAH0AfQDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA';
+        }
+
+        function createPlaceholderMap() {
+            // Create a simple placeholder map
+            const placeholderCanvas = document.createElement('canvas');
+            placeholderCanvas.width = 1000;
+            placeholderCanvas.height = 1000;
+            const placeholderCtx = placeholderCanvas.getContext('2d');
+            
+            // Create grid pattern
+            placeholderCtx.fillStyle = '#2a2a2a';
+            placeholderCtx.fillRect(0, 0, 1000, 1000);
+            
+            placeholderCtx.strokeStyle = '#404040';
+            placeholderCtx.lineWidth = 1;
+            for (let i = 0; i <= 1000; i += 100) {
+                placeholderCtx.beginPath();
+                placeholderCtx.moveTo(i, 0);
+                placeholderCtx.lineTo(i, 1000);
+                placeholderCtx.stroke();
+                
+                placeholderCtx.beginPath();
+                placeholderCtx.moveTo(0, i);
+                placeholderCtx.lineTo(1000, i);
+                placeholderCtx.stroke();
+            }
+            
+            // Add text
+            placeholderCtx.fillStyle = '#808080';
+            placeholderCtx.font = '20px Arial';
+            placeholderCtx.textAlign = 'center';
+            placeholderCtx.fillText('DayZ Map (10km x 10km)', 500, 500);
+            
+            backgroundImage = placeholderCanvas;
+            render();
+        }
+
+        function resizeCanvas() {
+            const container = document.querySelector('.map-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            heatmapCanvas.width = canvas.width;
+            heatmapCanvas.height = canvas.height;
+            render();
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('resize', resizeCanvas);
+            
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mouseup', handleMouseUp);
+            canvas.addEventListener('wheel', handleWheel);
+            canvas.addEventListener('contextmenu', handleContextMenu);
+            
+            document.addEventListener('click', hideContextMenu);
+        }
+
+        function handleMouseDown(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (e.button === 0) { // Left click
+                viewSettings.isDragging = true;
+                viewSettings.dragStart = {x: x, y: y};
+                canvas.style.cursor = 'grabbing';
+            }
+        }
+
+        function handleMouseMove(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Update coordinates display
+            const gameCoords = screenToGameCoords(x, y);
+            document.getElementById('coordsDisplay').textContent = 
+                `Mouse: ${Math.round(x)}, ${Math.round(y)} | DayZ: ${Math.round(gameCoords.x)}, ${Math.round(gameCoords.z)}`;
+            
+            if (viewSettings.isDragging) {
+                const dx = x - viewSettings.dragStart.x;
+                const dy = y - viewSettings.dragStart.y;
+                
+                viewSettings.offsetX += dx;
+                viewSettings.offsetY += dy;
+                
+                viewSettings.dragStart = {x: x, y: y};
+                render();
+            }
+        }
+
+        function handleMouseUp(e) {
+            viewSettings.isDragging = false;
+            canvas.style.cursor = 'crosshair';
+        }
+
+        function handleWheel(e) {
+            e.preventDefault();
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            const newScale = Math.max(0.1, Math.min(5, viewSettings.scale * zoomFactor));
+            
+            // Zoom towards mouse position
+            const mouseX = x - viewSettings.offsetX;
+            const mouseY = y - viewSettings.offsetY;
+            
+            viewSettings.offsetX = x - mouseX * (newScale / viewSettings.scale);
+            viewSettings.offsetY = y - mouseY * (newScale / viewSettings.scale);
+            
+            viewSettings.scale = newScale;
+            render();
+        }
+
+        function handleContextMenu(e) {
+            e.preventDefault();
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            contextMenuPos = {x: x, y: y};
+            gameContextPos = screenToGameCoords(x, y);
+            
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'block';
+            menu.style.left = e.clientX + 'px';
+            menu.style.top = e.clientY + 'px';
+            
+            // Show/hide spawn point option based on selection
+            document.getElementById('addSpawnPointOption').style.display = 
+                selectedZone !== null ? 'block' : 'none';
+        }
+
+        function hideContextMenu() {
+            document.getElementById('contextMenu').style.display = 'none';
+        }
+
+        function screenToGameCoords(screenX, screenY) {
+            const x = (screenX - viewSettings.offsetX) / viewSettings.scale;
+            const z = (screenY - viewSettings.offsetY) / viewSettings.scale;
+            return {x: x, z: z};
+        }
+
+        function gameToScreenCoords(gameX, gameZ) {
+            const x = gameX * viewSettings.scale + viewSettings.offsetX;
+            const z = gameZ * viewSettings.scale + viewSettings.offsetY;
+            return {x: x, y: z};
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw background
+            if (backgroundImage) {
+                const imgWidth = backgroundImage.width * viewSettings.scale;
+                const imgHeight = backgroundImage.height * viewSettings.scale;
+                ctx.drawImage(backgroundImage, 
+                    viewSettings.offsetX, viewSettings.offsetY, 
+                    imgWidth, imgHeight);
+            }
+            
+            // Draw grid if enabled
+            if (showGrid) {
+                drawGrid();
+            }
+            
+            // Draw heatmap if enabled
+            if (showHeatmap) {
+                drawHeatmap();
+            }
+            
+            // Draw zones
+            mapData.zones.forEach((zone, index) => {
+                const pos = gameToScreenCoords(
+                    parseFloat(zone.position.split(' ')[0]),
+                    parseFloat(zone.position.split(' ')[2])
+                );
+                
+                const radius = zone.triggerRadius * viewSettings.scale;
+                
+                // Draw trigger zone
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
+                ctx.fillStyle = selectedZone === index ? 'rgba(237, 66, 69, 0.3)' : 'rgba(88, 101, 242, 0.2)';
+                ctx.fill();
+                ctx.strokeStyle = selectedZone === index ? '#ed4245' : '#5865f2';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Draw zone name
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(zone.name, pos.x, pos.y - radius - 5);
+                
+                // Draw spawn points
+                zone.spawnPoints.forEach(sp => {
+                    const spPos = gameToScreenCoords(
+                        parseFloat(sp.position.split(' ')[0]),
+                        parseFloat(sp.position.split(' ')[2])
+                    );
+                    
+                    // Draw spawn point
+                    ctx.beginPath();
+                    ctx.arc(spPos.x, spPos.y, 5 * viewSettings.scale, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#faa61a';
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    
+                    // Draw spawn radius
+                    const spRadius = sp.radius * viewSettings.scale;
+                    ctx.beginPath();
+                    ctx.arc(spPos.x, spPos.y, spRadius, 0, 2 * Math.PI);
+                    ctx.strokeStyle = 'rgba(250, 166, 26, 0.5)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                });
+            });
+        }
+
+        function drawGrid() {
+            const gridSize = 1000; // 1km grid
+            
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            
+            for (let x = 0; x <= MAP_SIZE; x += gridSize) {
+                const screenX = gameToScreenCoords(x, 0).x;
+                if (screenX >= 0 && screenX <= canvas.width) {
+                    ctx.beginPath();
+                    ctx.moveTo(screenX, 0);
+                    ctx.lineTo(screenX, canvas.height);
+                    ctx.stroke();
+                }
+            }
+            
+            for (let z = 0; z <= MAP_SIZE; z += gridSize) {
+                const screenY = gameToScreenCoords(0, z).y;
+                if (screenY >= 0 && screenY <= canvas.height) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, screenY);
+                    ctx.lineTo(canvas.width, screenY);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function drawHeatmap() {
+            heatmapCtx.clearRect(0, 0, heatmapCanvas.width, heatmapCanvas.height);
+            
+            // Create gradient for heatmap
+            const gradient = heatmapCtx.createRadialGradient(
+                heatmapCanvas.width/2, heatmapCanvas.height/2, 0,
+                heatmapCanvas.width/2, heatmapCanvas.height/2, Math.max(heatmapCanvas.width, heatmapCanvas.height)
+            );
+            
+            // Add zones to heatmap
+            mapData.zones.forEach(zone => {
+                const pos = gameToScreenCoords(
+                    parseFloat(zone.position.split(' ')[0]),
+                    parseFloat(zone.position.split(' ')[2])
+                );
+                
+                const radius = zone.triggerRadius * viewSettings.scale;
+                const intensity = zone.spawnChance * heatmapIntensity;
+                
+                // Create radial gradient for this zone
+                const zoneGradient = heatmapCtx.createRadialGradient(
+                    pos.x, pos.y, 0,
+                    pos.x, pos.y, radius
+                );
+                
+                // Color based on spawn chance
+                if (zone.spawnChance >= 0.8) {
+                    zoneGradient.addColorStop(0, `rgba(255, 0, 0, ${intensity})`);
+                } else if (zone.spawnChance >= 0.6) {
+                    zoneGradient.addColorStop(0, `rgba(255, 165, 0, ${intensity})`);
+                } else if (zone.spawnChance >= 0.4) {
+                    zoneGradient.addColorStop(0, `rgba(255, 255, 0, ${intensity})`);
+                } else if (zone.spawnChance >= 0.2) {
+                    zoneGradient.addColorStop(0, `rgba(0, 255, 0, ${intensity})`);
+                } else {
+                    zoneGradient.addColorStop(0, `rgba(0, 0, 255, ${intensity})`);
+                }
+                
+                zoneGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                
+                heatmapCtx.fillStyle = zoneGradient;
+                heatmapCtx.beginPath();
+                heatmapCtx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
+                heatmapCtx.fill();
+            });
+            
+            // Draw heatmap overlay
+            ctx.save();
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.drawImage(heatmapCanvas, 0, 0);
+            ctx.restore();
+        }
+
+        function zoomIn() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            const newScale = Math.min(5, viewSettings.scale * 1.2);
+            const mouseX = centerX - viewSettings.offsetX;
+            const mouseY = centerY - viewSettings.offsetY;
+            
+            viewSettings.offsetX = centerX - mouseX * (newScale / viewSettings.scale);
+            viewSettings.offsetY = centerY - mouseY * (newScale / viewSettings.scale);
+            
+            viewSettings.scale = newScale;
+            render();
+        }
+
+        function zoomOut() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            const newScale = Math.max(0.1, viewSettings.scale * 0.8);
+            const mouseX = centerX - viewSettings.offsetX;
+            const mouseY = centerY - viewSettings.offsetY;
+            
+            viewSettings.offsetX = centerX - mouseX * (newScale / viewSettings.scale);
+            viewSettings.offsetY = centerY - mouseY * (newScale / viewSettings.scale);
+            
+            viewSettings.scale = newScale;
+            render();
+        }
+
+        function resetView() {
+            viewSettings.offsetX = 0;
+            viewSettings.offsetY = 0;
+            viewSettings.scale = 0.5;
+            render();
+        }
+
+        function toggleGrid() {
+            showGrid = !showGrid;
+            render();
+        }
+
+        function toggleHeatmap() {
+            showHeatmap = !showHeatmap;
+            document.getElementById('heatmapToggle').checked = showHeatmap;
+            document.getElementById('heatmapLegend').style.display = showHeatmap ? 'block' : 'none';
+            render();
+        }
+
+        function updateHeatmapIntensity(value) {
+            heatmapIntensity = parseFloat(value);
+            document.getElementById('intensityValue').textContent = value;
+            if (showHeatmap) render();
+        }
+
+        function createZoneHere() {
+            zoneCounter++;
+            const zone = {
+                name: `Zone_${zoneCounter}`,
+                enabled: 1,
+                position: `${Math.round(gameContextPos.x)} 0 ${Math.round(gameContextPos.z)}`,
+                triggerRadius: 100,
+                spawnChance: 1.0,
+                despawnOnExit: 1,
+                despawnDistance: 150,
+                respawnCooldown: 300,
+                spawnPoints: []
+            };
+            
+            mapData.zones.push(zone);
+            selectedZone = mapData.zones.length - 1;
+            
+            hideContextMenu();
+            updateUI();
+            render();
+        }
+
+        function addSpawnPointToSelected() {
+            if (selectedZone === null) return;
+            
+            const zone = mapData.zones[selectedZone];
+            const spawnPoint = {
+                position: zone.position,
+                radius: 5.0,
+                tierIds: [1],
+                entities: 3,
+                useFixedHeight: 0
+            };
+            
+            zone.spawnPoints.push(spawnPoint);
+            updateUI();
+            render();
+        }
+
+        function addSpawnPointHere() {
+            if (selectedZone === null) return;
+            
+            const zone = mapData.zones[selectedZone];
+            const spawnPoint = {
+                position: `${Math.round(gameContextPos.x)} 0 ${Math.round(gameContextPos.z)}`,
+                radius: 5.0,
+                tierIds: [1],
+                entities: 3,
+                useFixedHeight: 0
+            };
+            
+            zone.spawnPoints.push(spawnPoint);
+            hideContextMenu();
+            updateUI();
+            render();
+        }
+
+        function updateSelectedZone(field, value) {
+            if (selectedZone === null) return;
+            
+            mapData.zones[selectedZone][field] = value;
+            
+            if (field === 'name') {
+                updateUI();
+            }
+            
+            render();
+        }
+
+        function updateSelectedSpawnPoint(spIndex, field, value) {
+            if (selectedZone === null) return;
+            
+            const zone = mapData.zones[selectedZone];
+            zone.spawnPoints[spIndex][field] = value;
+            
+            render();
+        }
+
+        function updateSelectedSpawnPointTiers(spIndex, value) {
+            if (selectedZone === null) return;
+            
+            const tierIds = value.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+            mapData.zones[selectedZone].spawnPoints[spIndex].tierIds = tierIds;
+            
+            render();
+        }
+
+        function deleteSelectedZone() {
+            if (selectedZone === null) return;
+            
+            mapData.zones.splice(selectedZone, 1);
+            selectedZone = null;
+            updateUI();
+            render();
+        }
+
+        function duplicateSelectedZone() {
+            if (selectedZone === null) return;
+            
+            const originalZone = mapData.zones[selectedZone];
+            const newZone = JSON.parse(JSON.stringify(originalZone));
+            newZone.name = originalZone.name + '_copy';
+            
+            // Offset position slightly
+            const pos = newZone.position.split(' ').map(Number);
+            pos[0] += 50; // Offset X by 50m
+            newZone.position = pos.join(' ');
+            
+            mapData.zones.push(newZone);
+            selectedZone = mapData.zones.length - 1;
+            updateUI();
+            render();
+        }
+
+        function centerOnZone() {
+            if (selectedZone === null) return;
+            
+            const zone = mapData.zones[selectedZone];
+            const pos = zone.position.split(' ').map(Number);
+            
+            const screenPos = gameToScreenCoords(pos[0], pos[2]);
+            viewSettings.offsetX = canvas.width/2 - screenPos.x;
+            viewSettings.offsetY = canvas.height/2 - screenPos.y;
+            
+            render();
+        }
+
+        function updateGlobalSettings() {
+            mapData.globalSettings = {
+                systemEnabled: parseInt(document.getElementById('systemEnabled').value),
+                checkInterval: parseFloat(document.getElementById('checkInterval').value),
+                maxEntitiesPerZone: parseInt(document.getElementById('maxEntitiesPerZone').value),
+                entityLifetime: parseInt(document.getElementById('entityLifetime').value),
+                minSpawnDistanceFromPlayer: parseFloat(document.getElementById('minSpawnDistance').value)
+            };
+        }
+
+        function updateUI() {
+            document.getElementById('zoneCount').textContent = mapData.zones.length;
+            
+            const zonesList = document.getElementById('zonesList');
+            if (mapData.zones.length === 0) {
+                zonesList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🎯</div>
+                        <div>Right-click on map to create your first zone</div>
+                    </div>
+                `;
+                document.getElementById('zoneDetails').style.display = 'none';
+                return;
+            }
+            
+            zonesList.innerHTML = '';
+            mapData.zones.forEach((zone, index) => {
+                const zoneDiv = document.createElement('div');
+                zoneDiv.className = `zone-item ${selectedZone === index ? 'selected' : ''}`;
+                zoneDiv.onclick = () => selectZone(index);
+                
+                zoneDiv.innerHTML = `
+                    <div class="zone-name">${zone.name}</div>
+                    <div class="zone-info">
+                        Position: ${zone.position}<br>
+                        Radius: ${zone.triggerRadius}m | Chance: ${(zone.spawnChance * 100).toFixed(0)}%<br>
+                        Spawn Points: ${zone.spawnPoints.length}
+                    </div>
+                    <div class="zone-actions">
+                        <button class="zone-action-btn" onclick="event.stopPropagation(); deleteZone(${index})">Delete</button>
+                    </div>
+                `;
+                
+                zonesList.appendChild(zoneDiv);
+            });
+            
+            if (selectedZone !== null) {
+                const zone = mapData.zones[selectedZone];
+                document.getElementById('zoneDetails').style.display = 'block';
+                
+                document.getElementById('zoneName').value = zone.name;
+                document.getElementById('zoneEnabled').value = zone.enabled;
+                document.getElementById('zoneTriggerRadius').value = zone.triggerRadius;
+                document.getElementById('zoneSpawnChance').value = zone.spawnChance;
+                document.getElementById('zoneDespawnOnExit').value = zone.despawnOnExit;
+                document.getElementById('zoneDespawnDistance').value = zone.despawnDistance;
+                document.getElementById('zoneRespawnCooldown').value = zone.respawnCooldown;
+                
+                const spawnPointsList = document.getElementById('spawnPointsList');
+                spawnPointsList.innerHTML = '';
+                
+                zone.spawnPoints.forEach((sp, spIndex) => {
+                    const spDiv = document.createElement('div');
+                    spDiv.className = 'spawn-point-item';
+                    spDiv.innerHTML = `
+                        <div class="spawn-point-header">
+                            <div class="spawn-point-name">Spawn Point ${spIndex + 1}</div>
+                            <button class="btn btn-danger btn-small" onclick="removeSpawnPoint(${spIndex})">Remove</button>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Position</label>
+                                <input type="text" value="${sp.position}" 
+                                       onchange="updateSelectedSpawnPoint(${spIndex}, 'position', this.value)">
+                            </div>
+                            <div class="form-group">
+                                <label>Radius</label>
+                                <input type="number" value="${sp.radius}" step="0.1" min="0.1"
+                                       onchange="updateSelectedSpawnPoint(${spIndex}, 'radius', parseFloat(this.value))">
+                            </div>
+                            <div class="form-group">
+                                <label>Entities</label>
+                                <input type="number" value="${sp.entities}" min="1"
+                                       onchange="updateSelectedSpawnPoint(${spIndex}, 'entities', parseInt(this.value))">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Tier IDs (comma-separated)</label>
+                            <input type="text" value="${sp.tierIds.join(', ')}" 
+                                   onchange="updateSelectedSpawnPointTiers(${spIndex}, this.value)">
+                        </div>
+                        <div class="tier-tags">
+                            ${sp.tierIds.map(tierId => 
+                                `<div class="tier-tag">${tiersData[tierId]?.name || `Tier ${tierId}`}</div>`
+                            ).join('')}
+                        </div>
+                    `;
+                    spawnPointsList.appendChild(spDiv);
+                });
+            } else {
+                document.getElementById('zoneDetails').style.display = 'none';
+            }
+        }
+
+        function selectZone(index) {
+            selectedZone = index;
+            updateUI();
+        }
+
+        function deleteZone(index) {
+            mapData.zones.splice(index, 1);
+            if (selectedZone === index) {
+                selectedZone = null;
+            } else if (selectedZone > index) {
+                selectedZone--;
+            }
+            updateUI();
+            render();
+        }
+
+        function removeSpawnPoint(spIndex) {
+            if (selectedZone === null) return;
+            
+            mapData.zones[selectedZone].spawnPoints.splice(spIndex, 1);
+            updateUI();
+            render();
+        }
+
+        function loadSampleData() {
+            mapData = {
+                globalSettings: {
+                    systemEnabled: 1,
+                    checkInterval: 15.0,
+                    maxEntitiesPerZone: 20,
+                    entityLifetime: 600,
+                    minSpawnDistanceFromPlayer: 30.0
+                },
+                zones: [
+                    {
+                        name: "NWAF_Military_Zone",
+                        enabled: 1,
+                        position: "4500 342 10500",
+                        triggerRadius: 200,
+                        spawnChance: 0.8,
+                        despawnOnExit: 1,
+                        despawnDistance: 300,
+                        respawnCooldown: 450,
+                        spawnPoints: [
+                            {
+                                position: "4505 342 10505",
+                                radius: 5.0,
+                                tierIds: [2],
+                                entities: 4,
+                                useFixedHeight: 0
+                            },
+                            {
+                                position: "4520 342 10480",
+                                radius: 3.0,
+                                tierIds: [2, 3],
+                                entities: 2,
+                                useFixedHeight: 0
+                            }
+                        ]
+                    },
+                    {
+                        name: "Cherno_Downtown",
+                        enabled: 1,
+                        position: "6700 15 2650",
+                        triggerRadius: 150,
+                        spawnChance: 0.75,
+                        despawnOnExit: 1,
+                        despawnDistance: 200,
+                        respawnCooldown: 300,
+                        spawnPoints: [
+                            {
+                                position: "6710 15 2660",
+                                radius: 8.0,
+                                tierIds: [1],
+                                entities: 6,
+                                useFixedHeight: 0
+                            }
+                        ]
+                    }
+                ]
+            };
+            
+            zoneCounter = mapData.zones.length;
+            updateGlobalSettings();
+            updateUI();
+            render();
+        }
+
+        function clearAllData() {
+            if (confirm('Are you sure you want to clear all zones?')) {
+                mapData.zones = [];
+                selectedZone = null;
+                zoneCounter = 0;
+                updateUI();
+                render();
+            }
+        }
+
+        function downloadJSON() {
+            const dataStr = JSON.stringify(mapData, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'Zones.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    mapData = importedData;
+                    zoneCounter = mapData.zones.length;
+                    updateGlobalSettings();
+                    updateUI();
+                    render();
+                } catch (error) {
+                    alert('Error importing file: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function loadTiersData() {
+            // Load tiers from external file or use defaults
+            fetch('Tiers.json')
+                .then(response => response.json())
+                .then(data => {
+                    tiersData = data.tiers;
+                })
+                .catch(() => {
+                    // Use default tiers if file not found
+                    console.log('Using default tiers data');
+                })
+                .finally(() => {
+                    init();
+                });
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+        }
+
+        // Initialize
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
