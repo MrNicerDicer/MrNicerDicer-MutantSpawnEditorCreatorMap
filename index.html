@@ -1670,5 +1670,195 @@
         // Initialize
         window.addEventListener('load', init);
     </script>
+<script>
+// === FLICKER-FREE VERSION ===
+let canvas, ctx;
+let backgroundImage = new Image();
+let mapData = { zones: [], globalSettings: { systemEnabled: 1, checkInterval: 15, maxEntitiesPerZone: 20, entityLifetime: 600, minSpawnDistanceFromPlayer: 30 } };
+let scale = 0.5, offsetX = 0, offsetY = 0;
+let isDragging = false, lastX = 0, lastY = 0;
+
+// GitHub Pages kompatible Map
+const MAP_URL = 'https://i.imgur.com/iioppaS.png';
+
+// === ANTI-FLICKER SETUP ===
+let needsRender = false;
+let animationFrame = null;
+
+function safeRender() {
+    if (!needsRender || !ctx) return;
+    
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    animationFrame = requestAnimationFrame(() => {
+        if (!ctx || !canvas) return;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        if (backgroundImage.complete) {
+            const imgWidth = backgroundImage.width * scale;
+            const imgHeight = backgroundImage.height * scale;
+            ctx.drawImage(backgroundImage, offsetX, offsetY, imgWidth, imgHeight);
+        } else {
+            // Fallback wenn Bild noch lädt
+            ctx.fillStyle = '#2a2a2a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Loading DayZ Map...', canvas.width/2, canvas.height/2);
+        }
+        
+        needsRender = false;
+        animationFrame = null;
+    });
+}
+
+// === INITIALISIERUNG ===
+function init() {
+    canvas = document.getElementById('mapCanvas');
+    if (!canvas) return;
+    
+    ctx = canvas.getContext('2d');
+    setupCanvas();
+    setupEvents();
+    
+    // Bild laden
+    backgroundImage.crossOrigin = 'anonymous';
+    backgroundImage.onload = () => {
+        needsRender = true;
+        safeRender();
+    };
+    backgroundImage.onerror = () => {
+        // Fallback falls Bild nicht lädt
+        console.log('Fallback map loaded');
+        const fallback = document.createElement('canvas');
+        fallback.width = 1000;
+        fallback.height = 1000;
+        const fctx = fallback.getContext('2d');
+        fctx.fillStyle = '#333';
+        fctx.fillRect(0, 0, 1000, 1000);
+        fctx.fillStyle = '#fff';
+        fctx.font = '30px Arial';
+        fctx.textAlign = 'center';
+        fctx.fillText('DAYZ MAP', 500, 500);
+        backgroundImage = fallback;
+        needsRender = true;
+        safeRender();
+    };
+    backgroundImage.src = MAP_URL;
+    
+    // UI initialisieren
+    updateUI();
+}
+
+function setupCanvas() {
+    const container = document.querySelector('.map-container');
+    if (container && canvas) {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+    }
+}
+
+// === EVENTS (OHNE FLICKER) ===
+function setupEvents() {
+    if (!canvas) return;
+    
+    window.addEventListener('resize', () => {
+        setupCanvas();
+        needsRender = true;
+        safeRender();
+    });
+    
+    canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+    });
+    
+    canvas.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        offsetX += e.clientX - lastX;
+        offsetY += e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        
+        needsRender = true;
+        safeRender();
+    });
+    
+    canvas.addEventListener('mouseup', () => isDragging = false);
+    
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        scale = Math.max(0.1, Math.min(3, scale * delta));
+        needsRender = true;
+        safeRender();
+    });
+    
+    canvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left - offsetX) / scale;
+        const y = (e.clientY - rect.top - offsetY) / scale;
+        
+        // Zone erstellen
+        const zone = {
+            name: `Zone_${mapData.zones.length + 1}`,
+            enabled: 1,
+            position: `${Math.round(x)} 0 ${Math.round(y)}`,
+            triggerRadius: 100,
+            spawnChance: 1.0,
+            despawnOnExit: 1,
+            despawnDistance: 150,
+            respawnCooldown: 300,
+            spawnPoints: []
+        };
+        mapData.zones.push(zone);
+        selectedZone = mapData.zones.length - 1;
+        updateUI();
+        needsRender = true;
+        safeRender();
+    });
+}
+
+// === ZONEN FUNKTIONEN ===
+function updateUI() {
+    const count = document.getElementById('zoneCount');
+    if (count) count.textContent = mapData.zones.length;
+}
+
+function loadSampleData() {
+    mapData.zones = [{
+        name: "NWAF Military Base",
+        enabled: 1,
+        position: "4500 0 10500",
+        triggerRadius: 200,
+        spawnChance: 0.8,
+        despawnOnExit: 1,
+        despawnDistance: 300,
+        respawnCooldown: 450,
+        spawnPoints: [{ position: "4505 0 10505", radius: 5, tierIds: [2], entities: 4 }]
+    }];
+    selectedZone = 0;
+    updateUI();
+    needsRender = true;
+    safeRender();
+}
+
+function downloadJSON() {
+    const blob = new Blob([JSON.stringify(mapData, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Zones.json';
+    a.click();
+}
+
+// === START ===
+window.addEventListener('load', init);
+</script>
+
 </body>
 </html>
