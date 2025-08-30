@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DayZ Mutant Spawn System - GitHub Pages Map Editor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #36393f; color: #dcddde; overflow: hidden; }
+        .app-container { display: flex; height: 100vh; }
+        .sidebar { width: 380px; background: #2f3136; border-right: 1px solid #202225; overflow-y: auto; display: flex; flex-direction: column; }
+        .sidebar-header { background: linear-gradient(135deg, #5865f2 0%, #7289da 100%); color: white; padding: 15px; text-align: center; }
+        .sidebar-header h1 { font-size: 1.3rem; margin-bottom: 5px; }
+        .quick-actions { display: flex; gap: 8px; padding: 15px; background: #40444b; }
+        .quick-action-btn { flex: 1; background: #5865f2; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 15px; }
+        .map-container { flex: 1; position: relative; background: #202225; }
+        .map-canvas { cursor: crosshair; display: block; width: 100%; height: 100%; }
+        .map-controls { position: absolute; top: 15px; right: 15px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
+        .map-control-btn { background: rgba(64, 68, 75, 0.9); color: #dcddde; border: none; padding: 8px; border-radius: 4px; cursor: pointer; width: 36px; height: 36px; }
+        .coordinates-display { position: absolute; bottom: 15px; left: 15px; background: rgba(47, 49, 54, 0.95); color: #dcddde; padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 0.85rem; }
+        .zone-list { background: #40444b; border-radius: 6px; margin-bottom: 15px; }
+        .zone-list-header { background: linear-gradient(135deg, #5865f2, #4752c4); color: white; padding: 10px 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        .zone-item { padding: 12px 14px; border-bottom: 1px solid #36393f; cursor: pointer; transition: all 0.2s ease; }
+        .zone-item:hover { background: #36393f; }
+        .zone-item.selected { background: linear-gradient(90deg, rgba(88, 101, 242, 0.2), rgba(88, 101, 242, 0.05)); border-left: 3px solid #5865f2; }
+        .zone-details { background: #40444b; border-radius: 6px; padding: 15px; margin-bottom: 15px; }
+        .form-group { margin-bottom: 12px; }
+        .form-group input, .form-group select { width: 100%; padding: 6px 8px; border: 1px solid #40444b; border-radius: 4px; background: #36393f; color: #dcddde; }
+        .btn { background: linear-gradient(135deg, #5865f2 0%, #7289da 100%); color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; }
+        .btn-danger { background: linear-gradient(135deg, #ed4245, #c62828); }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>🧟 Mutant Spawn Editor</h1>
+                <p>Interactive zone placement for DayZ</p>
+            </div>
+            
+            <div class="quick-actions">
+                <input type="file" id="jsonFileInput" accept=".json" style="display: none;" onchange="importJSON(event)">
+                <button class="quick-action-btn" onclick="document.getElementById('jsonFileInput').click()">📁 Import</button>
+                <button class="quick-action-btn" onclick="loadSampleData()">📋 Sample</button>
+                <button class="quick-action-btn" onclick="downloadJSON()">💾 Export</button>
+            </div>
+            
+            <div class="sidebar-content">
+                <div class="zone-list">
+                    <div class="zone-list-header">
+                        <span>Zones (<span id="zoneCount">0</span>)</span>
+                        <button class="btn btn-small" onclick="clearAllData()">Clear</button>
+                    </div>
+                    <div id="zonesList"></div>
+                </div>
+
+                <div id="zoneDetails" class="zone-details" style="display: none;">
+                    <h3>Zone Configuration</h3>
+                    <div class="form-group">
+                        <label>Zone Name</label>
+                        <input type="text" id="zoneName" onchange="updateSelectedZone('name', this.value)" placeholder="e.g., Military Base Alpha">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Trigger Radius</label>
+                            <input type="number" id="zoneTriggerRadius" onchange="updateSelectedZone('triggerRadius', parseFloat(this.value))" min="10" placeholder="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Spawn Chance</label>
+                            <input type="number" id="zoneSpawnChance" onchange="updateSelectedZone('spawnChance', parseFloat(this.value))" min="0" max="1" step="0.1" placeholder="1.0">
+                        </div>
+                    </div>
+
+                    <h4 style="margin: 15px 0 8px 0; color: #faa61a;">Spawn Points</h4>
+                    <div id="spawnPointsList"></div>
+                    <button class="btn btn-success btn-small" onclick="addSpawnPointToSelected()" style="width: 100%; margin: 8px 0;">+ Add Spawn Point</button>
+                    
+                    <div style="display: flex; gap: 8px; margin-top: 15px;">
+                        <button class="btn btn-danger btn-small" onclick="deleteSelectedZone()" style="flex: 1;">Delete</button>
+                        <button class="btn btn-secondary btn-small" onclick="duplicateSelectedZone()" style="flex: 1;">Duplicate</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="map-container">
+            <canvas id="mapCanvas" class="map-canvas"></canvas>
+            
+            <div class="map-controls">
+                <button class="map-control-btn" onclick="zoomIn()" title="Zoom In">+</button>
+                <button class="map-control-btn" onclick="zoomOut()" title="Zoom Out">-</button>
+                <button class="map-control-btn" onclick="resetView()" title="Reset View">⌂</button>
+            </div>
+
+            <div class="coordinates-display" id="coordsDisplay">Mouse: 0, 0 | DayZ: 0, 0</div>
+        </div>
+    </div>
+
+    <script>
+        // GitHub Pages Ready JavaScript
+        let canvas, ctx;
+        let backgroundImage = null;
+        let mapData = {
+            globalSettings: {
+                systemEnabled: 1,
+                checkInterval: 15.0,
+                maxEntitiesPerZone: 20,
+                entityLifetime: 600,
+                minSpawnDistanceFromPlayer: 30.0
+            },
+            zones: []
+        };
+
+        // GitHub Pages kompatible Tiers
+        const tiersData = {
+            "1": { name: "Basic Zombies", classnames: ["ZmbM_HunterOld_Autumn", "ZmbF_SurvivorNormal_Blue", "ZmbM_CitizenASkinny"] },
+            "2": { name: "Military Zombies", classnames: ["ZmbM_SoldierNormal", "ZmbM_PatrolNormal_PautRev"] },
+            "3": { name: "Wildlife", classnames: ["Animal_UrsusArctos", "Animal_CanisLupus_Grey", "Animal_SusScrofa"] }
+        };
+
+        let selectedZone = null;
+        let scale = 0.5, offsetX = 0, offsetY = 0;
+        let isDragging = false, dragStart = {x: 0, y: 0};
+
+        // Anti-flackern rendering
+        let renderScheduled = false;
+        function render() {
+            if (renderScheduled) return;
+            renderScheduled = true;
+            requestAnimationFrame(() => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (backgroundImage && backgroundImage.complete) {
+                    ctx.drawImage(backgroundImage, offsetX, offsetY, 
+                        backgroundImage.width * scale, 
+                        backgroundImage.height * scale);
+                }
+                
+                // Draw zones
+                mapData.zones.forEach((zone, index) => {
+                    const pos = gameToScreenCoords(
+                        parseFloat(zone.position.split(' ')[0]),
+                        parseFloat(zone.position.split(' ')[2])
+                    );
+                    
+                    const radius = zone.triggerRadius * scale;
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
+                    ctx.fillStyle = selectedZone === index ? 'rgba(237, 66, 69, 0.3)' : 'rgba(88, 101, 242, 0.2)';
+                    ctx.fill();
+                    ctx.strokeStyle = selectedZone === index ? '#ed4245' : '#5865f2';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    
+                    // Zone name
+                    ctx.fillStyle = '#fff';
+                    ctx.font = `${12 * scale}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(zone.name, pos.x, pos.y - radius - 5);
+                    
+                    // Spawn points
+                    zone.spawnPoints.forEach(sp => {
+                        const spPos = gameToScreenCoords(
+                            parseFloat(sp.position.split(' ')[0]),
+                            parseFloat(sp.position.split(' ')[2])
+                        );
+                        ctx.beginPath();
+                        ctx.arc(spPos.x, spPos.y, 5 * scale, 0, 2 * Math.PI);
+                        ctx.fillStyle = '#faa61a';
+                        ctx.fill();
+                    });
+                });
+                renderScheduled = false;
+            });
+        }
+
+        function setupCanvas() {
+            canvas = document.getElementById('mapCanvas');
+            ctx = canvas.getContext('2d');
+            resizeCanvas();
+            
+            backgroundImage = new Image();
+            backgroundImage.src = 'https://i.imgur.com/iioppaS.png';
+            backgroundImage.onload = () => render();
+            backgroundImage.onerror = () => {
+                // Fallback placeholder
+                const placeholder = document.createElement('canvas');
+                placeholder.width = 1000;
+                placeholder.height = 1000;
+                const pctx = placeholder.getContext('2d');
+                pctx.fillStyle = '#2a2a2a';
+                pctx.fillRect(0, 0, 1000, 1000);
+                pctx.fillStyle = '#fff';
+                pctx.font = '20px Arial';
+                pctx.textAlign = 'center';
+                pctx.fillText('DayZ Map (10km x 10km)', 500, 500);
+                backgroundImage = placeholder;
+                render();
+            };
+        }
+
+        function resizeCanvas() {
+            const container = document.querySelector('.map-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            render();
+        }
+
+        function gameToScreenCoords(x, z) {
+            return { x: x * scale + offsetX, y: z * scale + offsetY };
+        }
+
+        function screenToGameCoords(screenX, screenY) {
+            return { x: (screenX - offsetX) / scale, z: (screenY - offsetY) / scale };
+        }
+
+        // Event listeners
+        function setupEventListeners() {
+            window.addEventListener('resize', resizeCanvas);
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                dragStart = {x: e.clientX, y: e.clientY};
+            });
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const gameCoords = screenToGameCoords(x, y);
+                document.getElementById('coordsDisplay').textContent = 
+                    `Mouse: ${Math.round(x)}, ${Math.round(y)} | DayZ: ${Math.round(gameCoords.x)}, ${Math.round(gameCoords.z)}`;
+                
+                if (isDragging) {
+                    offsetX += e.clientX - dragStart.x;
+                    offsetY += e.clientY - dragStart.y;
+                    dragStart = {x: e.clientX, y: e.clientY};
+                    render();
+                }
+            });
+            canvas.addEventListener('mouseup', () => isDragging = false);
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
+                scale = Math.max(0.1, Math.min(3, scale * scaleFactor));
+                render();
+            });
+            canvas.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const gameCoords = screenToGameCoords(e.clientX - rect.left, e.clientY - rect.top);
+                createZone(gameCoords.x, gameCoords.z);
+            });
+        }
+
+        // Zone functions
+        function createZone(x, z) {
+            const zone = {
+                name: `Zone_${mapData.zones.length + 1}`,
+                enabled: 1,
+                position: `${Math.round(x)} 0 ${Math.round(z)}`,
+                triggerRadius: 100,
+                spawnChance: 1.0,
+                despawnOnExit: 1,
+                despawnDistance: 150,
+                respawnCooldown: 300,
+                spawnPoints: []
+            };
+            mapData.zones.push(zone);
+            selectedZone = mapData.zones.length - 1;
+            updateUI();
+            render();
+        }
+
+        function addSpawnPointToSelected() {
+            if (selectedZone === null) return;
+            const zone = mapData.zones[selectedZone];
+            const spawnPoint = {
+                position: zone.position,
+                radius: 5.0,
+                tierIds: [1],
+                entities: 3,
+                useFixedHeight: 0
+            };
+            zone.spawnPoints.push(spawnPoint);
+            updateUI();
+            render();
+        }
+
+        function updateSelectedZone(field, value) {
+            if (selectedZone === null) return;
+            mapData.zones[selectedZone][field] = value;
+            updateUI();
+            render();
+        }
+
+        function updateUI() {
+            document.getElementById('zoneCount').textContent = mapData.zones.length;
+            
+            const zonesList = document.getElementById('zonesList');
+            if (mapData.zones.length === 0) {
+                zonesList.innerHTML = '<div style="padding: 20px; text-align: center; color: #b9bbbe;">Right-click map to create zones</div>';
+                return;
+            }
+            
+            zonesList.innerHTML = '';
+            mapData.zones.forEach((zone, index) => {
+                const div = document.createElement('div');
+                div.className = `zone-item ${selectedZone === index ? 'selected' : ''}`;
+                div.innerHTML = `
+                    <div style="font-weight: bold;">${zone.name}</div>
+                    <div style="font-size: 0.8em; color: #b9bbbe;">
+                        Position: ${zone.position}<br>
+                        Radius: ${zone.triggerRadius}m | Chance: ${(zone.spawnChance * 100).toFixed(0)}%
+                    </div>
+                `;
+                div.onclick = () => selectZone(index);
+                zonesList.appendChild(div);
+            });
+        }
+
+        function selectZone(index) {
+            selectedZone = index;
+            updateUI();
+        }
+
+        function loadSampleData() {
+            mapData = {
+                globalSettings: {
+                    systemEnabled: 1,
+                    checkInterval: 15.0,
+                    maxEntitiesPerZone: 20,
+                    entityLifetime: 600,
+                    minSpawnDistanceFromPlayer: 30.0
+                },
+                zones: [
+                    {
+                        name: "NWAF_Military_Zone",
+                        enabled: 1,
+                        position: "4500 0 10500",
+                        triggerRadius: 200,
+                        spawnChance: 0.8,
+                        despawnOnExit: 1,
+                        despawnDistance: 300,
+                        respawnCooldown: 450,
+                        spawnPoints: [
+                            {
+                                position: "4505 0 10505",
+                                radius: 5.0,
+                                tierIds: [2],
+                                entities: 4,
+                                useFixedHeight: 0
+                            }
+                        ]
+                    }
+                ]
+            };
+            updateUI();
+            render();
+        }
+
+        function downloadJSON() {
+            const blob = new Blob([JSON.stringify(mapData, null, 2)], 
+                {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'Zones.json';
+            a.click();
+        }
+
+        function clearAllData() {
+            if (confirm('Clear all zones?')) {
+                mapData.zones = [];
+                selectedZone = null;
+                updateUI();
+                render();
+            }
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            setupCanvas();
+            setupEventListeners();
+            updateUI();
+        });
+    </script>
+</body>
+</html>
